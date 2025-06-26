@@ -14,6 +14,10 @@ func main() {
 		return c.SendString("Hello, GBT route page!")
 	})
 
+	app.Get("/party", func(c *fiber.Ctx) error {
+		return c.SendString("This is party for first app run, congratulations Riya & Shivam!🎉")
+	})
+
 	app.Get("/env", func(c *fiber.Ctx) error {
 		return c.SendString("Hello, ENV! " + os.Getenv("TEST_ENV"))
 	})
