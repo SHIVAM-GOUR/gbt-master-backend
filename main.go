@@ -1,10 +1,14 @@
 package main
 
 import (
+	"encoding/json"
 	"log"
 	"net/http"
+	"strconv"
 
-	"github.com/gin-gonic/gin"
+	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/chi/v5/middleware"
+	"github.com/go-chi/cors"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 )
@@ -29,6 +33,7 @@ func main() {
 	// Database connection
 	var err error
 	dsn := "postgresql://postgres:fTCNqYhMCcceJvrZJknDNNvxmgRzUXLc@switchyard.proxy.rlwy.net:30216/railway"
+
 	// For Railway, use your DATABASE_URL:
 	// dsn := "your_railway_database_url_here"
 
@@ -43,190 +48,236 @@ func main() {
 		log.Fatal("Failed to migrate database:", err)
 	}
 
-	// Initialize Gin router
-	r := gin.Default()
+	// Initialize Chi router
+	r := chi.NewRouter()
 
-	// CORS middleware for frontend access
-	r.Use(func(c *gin.Context) {
-		c.Header("Access-Control-Allow-Origin", "*")
-		c.Header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
-		c.Header("Access-Control-Allow-Headers", "Content-Type")
-		if c.Request.Method == "OPTIONS" {
-			c.AbortWithStatus(204)
-			return
-		}
-		c.Next()
+	// Middleware
+	r.Use(middleware.Logger)
+	r.Use(middleware.Recoverer)
+
+	// CORS middleware
+	r.Use(cors.Handler(cors.Options{
+		AllowedOrigins:   []string{"*"},
+		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token"},
+		ExposedHeaders:   []string{"Link"},
+		AllowCredentials: true,
+		MaxAge:           300,
+	}))
+
+	// special API
+	r.Route("/riya", func(r chi.Router) {
+		r.Get("/", hiRiya)
 	})
 
-	// test running
-	r.GET("/riya", hiRiya)
+	// Routes
+	r.Route("/classes", func(r chi.Router) {
+		r.Get("/", getClasses)
+		r.Post("/", createClass)
+		r.Get("/{id}", getClass)
+		r.Put("/{id}", updateClass)
+		r.Delete("/{id}", deleteClass)
+	})
 
-	// Class routes
-	r.GET("/classes", getClasses)
-	r.GET("/classes/:id", getClass)
-	r.POST("/classes", createClass)
-	r.PUT("/classes/:id", updateClass)
-	r.DELETE("/classes/:id", deleteClass)
-
-	// Student routes
-	r.GET("/students", getStudents)
-	r.GET("/students/:id", getStudent)
-	r.POST("/students", createStudent)
-	r.PUT("/students/:id", updateStudent)
-	r.DELETE("/students/:id", deleteStudent)
+	r.Route("/students", func(r chi.Router) {
+		r.Get("/", getStudents)
+		r.Post("/", createStudent)
+		r.Get("/{id}", getStudent)
+		r.Put("/{id}", updateStudent)
+		r.Delete("/{id}", deleteStudent)
+	})
 
 	// Start server
 	log.Println("Server starting on :8080")
 	log.Fatal(http.ListenAndServe(":8080", r))
 }
 
+func hiRiya(w http.ResponseWriter, r *http.Request) {
+	var msg string = "Hi Riya Apni backend API is working.. 💜"
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(msg)
+}
+
 // Class CRUD operations
-func getClasses(c *gin.Context) {
+func getClasses(w http.ResponseWriter, r *http.Request) {
 	var classes []Class
 	db.Find(&classes)
-	c.JSON(200, classes)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(classes)
 }
 
-func hiRiya(c *gin.Context) {
-	var msg string
-	msg = "Hi Riya This API is Working 💜"
-	c.JSON(200, msg)
-}
-
-func getClass(c *gin.Context) {
-	id := c.Param("id")
+func getClass(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
 	var class Class
 
 	if err := db.First(&class, id).Error; err != nil {
-		c.JSON(404, gin.H{"error": "Class not found"})
+		w.WriteHeader(http.StatusNotFound)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Class not found"})
 		return
 	}
 
-	c.JSON(200, class)
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(class)
 }
 
-func createClass(c *gin.Context) {
+func createClass(w http.ResponseWriter, r *http.Request) {
 	var class Class
 
-	if err := c.ShouldBindJSON(&class); err != nil {
-		c.JSON(400, gin.H{"error": err.Error()})
+	if err := json.NewDecoder(r.Body).Decode(&class); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
 		return
 	}
 
 	if err := db.Create(&class).Error; err != nil {
-		c.JSON(500, gin.H{"error": "Failed to create class"})
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Failed to create class"})
 		return
 	}
 
-	c.JSON(201, class)
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(class)
 }
 
-func updateClass(c *gin.Context) {
-	id := c.Param("id")
+func updateClass(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
 	var class Class
 
 	if err := db.First(&class, id).Error; err != nil {
-		c.JSON(404, gin.H{"error": "Class not found"})
+		w.WriteHeader(http.StatusNotFound)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Class not found"})
 		return
 	}
 
-	if err := c.ShouldBindJSON(&class); err != nil {
-		c.JSON(400, gin.H{"error": err.Error()})
+	if err := json.NewDecoder(r.Body).Decode(&class); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
 		return
 	}
+
+	// Parse ID from URL param and set it to maintain the same ID
+	idInt, _ := strconv.Atoi(id)
+	class.ID = uint(idInt)
 
 	db.Save(&class)
-	c.JSON(200, class)
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(class)
 }
 
-func deleteClass(c *gin.Context) {
-	id := c.Param("id")
+func deleteClass(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
 
 	if err := db.Delete(&Class{}, id).Error; err != nil {
-		c.JSON(500, gin.H{"error": "Failed to delete class"})
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Failed to delete class"})
 		return
 	}
 
-	c.JSON(200, gin.H{"message": "Class deleted successfully"})
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"message": "Class deleted successfully"})
 }
 
 // Student CRUD operations
-func getStudents(c *gin.Context) {
+func getStudents(w http.ResponseWriter, r *http.Request) {
 	var students []Student
 	db.Preload("Class").Find(&students)
-	c.JSON(200, students)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(students)
 }
 
-func getStudent(c *gin.Context) {
-	id := c.Param("id")
+func getStudent(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
 	var student Student
 
 	if err := db.Preload("Class").First(&student, id).Error; err != nil {
-		c.JSON(404, gin.H{"error": "Student not found"})
+		w.WriteHeader(http.StatusNotFound)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Student not found"})
 		return
 	}
 
-	c.JSON(200, student)
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(student)
 }
 
-func createStudent(c *gin.Context) {
+func createStudent(w http.ResponseWriter, r *http.Request) {
 	var student Student
 
-	if err := c.ShouldBindJSON(&student); err != nil {
-		c.JSON(400, gin.H{"error": err.Error()})
+	if err := json.NewDecoder(r.Body).Decode(&student); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
 		return
 	}
 
 	// Check if class exists
 	var class Class
 	if err := db.First(&class, student.ClassID).Error; err != nil {
-		c.JSON(400, gin.H{"error": "Class not found"})
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Class not found"})
 		return
 	}
 
 	if err := db.Create(&student).Error; err != nil {
-		c.JSON(500, gin.H{"error": "Failed to create student"})
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Failed to create student"})
 		return
 	}
 
 	// Load the class information
 	db.Preload("Class").First(&student, student.ID)
-	c.JSON(201, student)
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(student)
 }
 
-func updateStudent(c *gin.Context) {
-	id := c.Param("id")
+func updateStudent(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
 	var student Student
 
 	if err := db.First(&student, id).Error; err != nil {
-		c.JSON(404, gin.H{"error": "Student not found"})
+		w.WriteHeader(http.StatusNotFound)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Student not found"})
 		return
 	}
 
-	if err := c.ShouldBindJSON(&student); err != nil {
-		c.JSON(400, gin.H{"error": err.Error()})
+	if err := json.NewDecoder(r.Body).Decode(&student); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
 		return
 	}
+
+	// Parse ID from URL param and set it to maintain the same ID
+	idInt, _ := strconv.Atoi(id)
+	student.ID = uint(idInt)
 
 	// Check if class exists
 	var class Class
 	if err := db.First(&class, student.ClassID).Error; err != nil {
-		c.JSON(400, gin.H{"error": "Class not found"})
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Class not found"})
 		return
 	}
 
 	db.Save(&student)
 	db.Preload("Class").First(&student, student.ID)
-	c.JSON(200, student)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(student)
 }
 
-func deleteStudent(c *gin.Context) {
-	id := c.Param("id")
+func deleteStudent(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
 
 	if err := db.Delete(&Student{}, id).Error; err != nil {
-		c.JSON(500, gin.H{"error": "Failed to delete student"})
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Failed to delete student"})
 		return
 	}
 
-	c.JSON(200, gin.H{"message": "Student deleted successfully"})
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"message": "Student deleted successfully"})
 }
