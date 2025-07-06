@@ -19,14 +19,6 @@ type Class struct {
 	Name string `json:"name" gorm:"not null"`
 }
 
-type Student struct {
-	ID         uint   `json:"id" gorm:"primaryKey"`
-	Name       string `json:"name" gorm:"not null"`
-	RollNumber string `json:"roll_number" gorm:"unique;not null"`
-	ClassID    uint   `json:"class_id" gorm:"not null"`
-	Class      Class  `json:"class" gorm:"foreignKey:ClassID"`
-}
-
 var db *gorm.DB
 
 func main() {
@@ -43,7 +35,7 @@ func main() {
 	}
 
 	// Auto migrate the schema
-	err = db.AutoMigrate(&Class{}, &Student{})
+	err = db.AutoMigrate(&Class{})
 	if err != nil {
 		log.Fatal("Failed to migrate database:", err)
 	}
@@ -77,14 +69,6 @@ func main() {
 		r.Get("/{id}", getClass)
 		r.Put("/{id}", updateClass)
 		r.Delete("/{id}", deleteClass)
-	})
-
-	r.Route("/students", func(r chi.Router) {
-		r.Get("/", getStudents)
-		r.Post("/", createStudent)
-		r.Get("/{id}", getStudent)
-		r.Put("/{id}", updateStudent)
-		r.Delete("/{id}", deleteStudent)
 	})
 
 	// Start server
@@ -178,106 +162,4 @@ func deleteClass(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{"message": "Class deleted successfully"})
-}
-
-// Student CRUD operations
-func getStudents(w http.ResponseWriter, r *http.Request) {
-	var students []Student
-	db.Preload("Class").Find(&students)
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(students)
-}
-
-func getStudent(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "id")
-	var student Student
-
-	if err := db.Preload("Class").First(&student, id).Error; err != nil {
-		w.WriteHeader(http.StatusNotFound)
-		json.NewEncoder(w).Encode(map[string]string{"error": "Student not found"})
-		return
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(student)
-}
-
-func createStudent(w http.ResponseWriter, r *http.Request) {
-	var student Student
-
-	if err := json.NewDecoder(r.Body).Decode(&student); err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
-		return
-	}
-
-	// Check if class exists
-	var class Class
-	if err := db.First(&class, student.ClassID).Error; err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(map[string]string{"error": "Class not found"})
-		return
-	}
-
-	if err := db.Create(&student).Error; err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(map[string]string{"error": "Failed to create student"})
-		return
-	}
-
-	// Load the class information
-	db.Preload("Class").First(&student, student.ID)
-
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(student)
-}
-
-func updateStudent(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "id")
-	var student Student
-
-	if err := db.First(&student, id).Error; err != nil {
-		w.WriteHeader(http.StatusNotFound)
-		json.NewEncoder(w).Encode(map[string]string{"error": "Student not found"})
-		return
-	}
-
-	if err := json.NewDecoder(r.Body).Decode(&student); err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
-		return
-	}
-
-	// Parse ID from URL param and set it to maintain the same ID
-	idInt, _ := strconv.Atoi(id)
-	student.ID = uint(idInt)
-
-	// Check if class exists
-	var class Class
-	if err := db.First(&class, student.ClassID).Error; err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(map[string]string{"error": "Class not found"})
-		return
-	}
-
-	db.Save(&student)
-	db.Preload("Class").First(&student, student.ID)
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(student)
-}
-
-func deleteStudent(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "id")
-
-	if err := db.Delete(&Student{}, id).Error; err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(map[string]string{"error": "Failed to delete student"})
-		return
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"message": "Student deleted successfully"})
 }
