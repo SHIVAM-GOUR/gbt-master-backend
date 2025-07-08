@@ -24,3 +24,10 @@ func CreateInquiry(w http.ResponseWriter, r *http.Request) {
 
 	utils.SendJSONResponse(w, http.StatusCreated, inquiry)
 }
+
+func GetInquiries(w http.ResponseWriter, r *http.Request) {
+	var inquiries []models.Inquiry
+	config.DB.Find(&inquiries)
+
+	utils.SendJSONResponse(w, http.StatusOK, inquiries)
+}

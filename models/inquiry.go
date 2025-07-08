@@ -15,7 +15,7 @@ type Inquiry struct {
 	Email                  *string    `gorm:"column:email;size:255" json:"email,omitempty" form:"email"`
 	Phone                  *string    `gorm:"column:phone;size:20" json:"phone,omitempty" form:"phone"`
 	Industry               *string    `gorm:"column:industry;size:40" json:"industry,omitempty" form:"industry"`
-	HasExistingWebsite     *bool      `gorm:"column:has_existing_website;default:false" json:"has_existing_website,omitempty" form:"has_existing_website"`
+	HasExistingWebsite     *bool      `gorm:"column:has_existing_website" json:"has_existing_website,omitempty" form:"has_existing_website"`
 	PreferredContactMethod *string    `gorm:"column:preferred_contact_method;size:40" json:"preferred_contact_method,omitempty" form:"preferred_contact_method"`
 	Status                 *string    `gorm:"column:status;size:40;default:'new'" json:"status,omitempty" form:"status"`
 	CreatedAt              *time.Time `gorm:"column:created_at;autoCreateTime" json:"created_at" form:"-"`

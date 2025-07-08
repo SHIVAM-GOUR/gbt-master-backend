@@ -4,7 +4,7 @@ CREATE TABLE inquiry (
     email VARCHAR(255),
     phone VARCHAR(20),
     industry VARCHAR(40),
-    has_existing_website BOOLEAN DEFAULT FALSE,
+    has_existing_website BOOLEAN,
     preferred_contact_method VARCHAR(40),
     status VARCHAR(40) DEFAULT 'new',
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(),

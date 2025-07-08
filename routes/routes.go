@@ -32,6 +32,7 @@ func SetupRoutes() *chi.Mux {
 
 	r.Route("/inquiry", func(r chi.Router) {
 		r.Post("/", handlers.CreateInquiry)
+		r.Get("/", handlers.GetInquiries)
 	})
 
 	return r
