@@ -22,7 +22,7 @@ func InitDB() {
 	}
 
 	// Auto migrate the schema
-	err = DB.AutoMigrate(&models.Class{}, &models.Student{})
+	err = DB.AutoMigrate(&models.Class{}, &models.Inquiry{})
 	if err != nil {
 		log.Fatal("Failed to migrate database:", err)
 	}

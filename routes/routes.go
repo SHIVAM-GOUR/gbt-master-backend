@@ -30,13 +30,9 @@ func SetupRoutes() *chi.Mux {
 		r.Delete("/{id}", handlers.DeleteClass)
 	})
 
-	// Student routes
-	r.Route("/students", func(r chi.Router) {
-		r.Get("/", handlers.GetStudents)
-		r.Post("/", handlers.CreateStudent)
-		r.Get("/{id}", handlers.GetStudent)
-		r.Put("/{id}", handlers.UpdateStudent)
-		r.Delete("/{id}", handlers.DeleteStudent)
+	r.Route("/inquiry", func(r chi.Router) {
+		r.Post("/", handlers.CreateInquiry)
+		r.Get("/", handlers.GetInquiries)
 	})
 
 	return r
